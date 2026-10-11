@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    A reference consumer of MeddlingIdiot.Greenlight.Sdk: a bonsai tree in a pot on the desktop.
+    Every passing build grows it a leaf, and enough of them grow it new branches. When a build
+    breaks, a handful of leaves turn red and drop off, and for as long as the pipeline stays
+    broken the tree keeps wilting - yellowing, drooping, shedding. Fix it and it recovers. A
+    pull request waiting on you puts a caterpillar on a branch, which is exactly as annoying as
+    it sounds, and leaves as a butterfly once you have dealt with it.
+
+    Unlike every other client, it remembers: the tree is written to AppData, so a reboot does not
+    cost you a month of passing builds.
+
+    net10.0-windows because the click-through overlay and the work-area maths are Win32. The
+    SDK itself is plain net8.0/net10.0.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>Greenlight.BonsaiClient</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\MeddlingIdiot.ico</ApplicationIcon>
+    <!-- Not a package. Fallout's Package target packs the whole solution. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.1" />
+  </ItemGroup>
+
+  <!-- The SDK and the updater, the same way your own app would take them. -->
+  <ItemGroup>
+    <PackageReference Include="MeddlingIdiot.Greenlight.Sdk" Version="1.2.0" />
+    <PackageReference Include="MeddlingIdiot.Velopack" Version="1.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+</Project>
