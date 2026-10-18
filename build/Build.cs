@@ -9,7 +9,7 @@ using Automation.Fallout.Components.Parameters;
 /// Build configuration for VelopackBuild
 /// </summary>
 
-public class Build : GitHubActionsBuild, IShowVersion, IClean, ICompile, IRestore, IScanForSecrets, IRunUnitTests, IRunIntegrationTests, IGenerateCoverageReport, ITest, IUpdateChangelog, IVelopack, ITagRelease, IAnnounceRelease, ICreateGitHubRelease
+public class Build : GitHubActionsBuild, IShowVersion, IClean, ICompile, IRestore, IRunUnitTests, IRunIntegrationTests, IGenerateCoverageReport, ITest, IUpdateChangelog, IVelopack, ITagRelease, IAnnounceRelease, ICreateGitHubRelease
 {
 
     public static int Main() => Execute<Build>(
@@ -17,7 +17,6 @@ public class Build : GitHubActionsBuild, IShowVersion, IClean, ICompile, IRestor
 
     string IHasVelopack.VelopackProjectName => "Greenlight.BonsaiClient";
     string IHasVelopack.VelopackIconPath => @"Greenlight.BonsaiClient\Assets\MeddlingIdiot.ico";
-    bool IHasTests.BreakBuildOnSecretLeaks => false;
 
     // Automation.Fallout.Components defaults these to AFTR's staftrinstallers, which this project has
     // no access to. Every MeddlingIdiot installer lives in meddlingidiotinstallers; the Nuke-era

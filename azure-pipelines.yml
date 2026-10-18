@@ -1,0 +1,146 @@
+# ============================================================================
+# Azure Pipelines Configuration for Fallout Build
+# ============================================================================
+#
+# Build Architecture:
+#   - Build Logic: All build logic is in Fallout (build/Build.cs)
+#   - CI/CD Orchestration: This YAML handles pipeline triggers and artifact publishing
+#   - Base Class: All DefaultBuilds inherit from AzurePipelinesBuild
+#
+# Fallout Targets (defined in build/Build.cs and DefaultBuilds):
+#   - ReleasePackage: Compile → Test → Package → Push to NuGet feed
+#   - ReleaseVelopack: Compile → Test → Build Velopack → Upload to Azure Blob
+#   - TagRelease: Tag and push git release (auto-triggered on main branch)
+#
+# ============================================================================
+
+trigger:
+  branches:
+    include:
+      - main
+      - feature/*
+      - bugfix/*
+
+pr:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - '**/*'
+    exclude:
+      - 'docs/**'
+      - 'README.md'
+      - 'CHANGELOG.md'
+      - 'LICENSE'
+
+name: 1.0.$(Rev:r)
+
+# ============================================================================
+# Variables
+# ============================================================================
+variables:
+  - group: Secrets # Holds AZURE_BLOB_SAS_TOKEN for Velopack uploads
+  - name: System.Debug
+    value: 'false'
+
+# ============================================================================
+# Build Stage
+# ============================================================================
+stages:
+  - stage: Build
+    displayName: 'Build, Test, and Package'
+    jobs:
+      - job: BuildJob
+        displayName: 'Fallout Build'
+        pool:
+          name: 'Self-hosted'
+
+        steps:
+          # ----------------------------------------------------------------
+          # Setup: Checkout code with full history for GitVersion
+          # ----------------------------------------------------------------
+          - checkout: self
+            displayName: 'Checkout Repository'
+            persistCredentials: true  # Allows 'git push' for TagRelease target
+            fetchDepth: 0            # Full history required for GitVersion
+            clean: true
+
+          # ----------------------------------------------------------------
+          # Setup: Install .NET SDK
+          # ----------------------------------------------------------------
+          # The version comes from global.json so the agent installs exactly the SDK the
+          # repository is pinned to - a literal here would drift from the pin.
+          - task: UseDotNet@2
+            displayName: 'Install the .NET SDK pinned in global.json'
+            inputs:
+              useGlobalJson: true
+
+          # ----------------------------------------------------------------
+          # Setup: Authenticate to Azure Artifacts Feeds
+          # ----------------------------------------------------------------
+          - task: NuGetAuthenticate@1
+            displayName: 'Authenticate to Azure Artifacts'
+
+          # ----------------------------------------------------------------
+          # Build: Run Fallout Build (uses default target from Build.cs)
+          # Default target is ReleasePackage, which performs:
+          #   1. ShowVersion → Clean → Restore → Compile
+          #   2. UnitTests → IntegrationTests → CoverageReport
+          #   3. UpdateChangelog → Package → ReleasePackage (push to feed)
+          #   4. TagRelease (if main branch)
+          # ----------------------------------------------------------------
+          # AZURE_BLOB_SAS_TOKEN comes from the 'Secrets' variable group. Secret variables are
+          # never exposed to scripts automatically, so it is mapped through env: - not passed on
+          # the command line, where it would show up in process listings. If the group has no
+          # such variable the macro arrives unexpanded as "$(AZURE_BLOB_SAS_TOKEN)", which the
+          # Velopack targets treat as missing: they warn and skip the upload.
+          - script: |
+              dotnet tool restore
+              dotnet run --project .\build\_build.csproj -- --artifacts-directory-param "$(Build.ArtifactStagingDirectory)"
+            displayName: 'Execute Fallout Build'
+            workingDirectory: $(Build.SourcesDirectory)
+            env:
+              AZURE_BLOB_SAS_TOKEN: $(AZURE_BLOB_SAS_TOKEN)
+
+          # ----------------------------------------------------------------
+          # Publish: NuGet Packages
+          # ----------------------------------------------------------------
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish NuGet Packages'
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)/packages'
+              artifact: 'nuget-packages'
+
+          # ----------------------------------------------------------------
+          # Publish: Code Coverage Results to Azure DevOps
+          # ----------------------------------------------------------------
+          - task: PublishCodeCoverageResults@2
+            displayName: 'Publish Code Coverage to Azure DevOps'
+            inputs:
+              codeCoverageTool: 'Cobertura'
+              summaryFileLocation: '$(Build.ArtifactStagingDirectory)\coverage-report\Cobertura.xml'
+              reportDirectory: '$(Build.ArtifactStagingDirectory)\coverage-report'
+              failIfCoverageEmpty: false
+
+          # ----------------------------------------------------------------
+          # Publish: Coverage Report Artifact
+          # ----------------------------------------------------------------
+          - task: PublishBuildArtifacts@1
+            displayName: 'Publish Coverage Report Artifact'
+            inputs:
+              targetPath: '$(Build.ArtifactStagingDirectory)\coverage-report'
+              artifact: 'coverage-report'
+
+          # ----------------------------------------------------------------
+          # Publish: Test Results to Azure DevOps
+          # ----------------------------------------------------------------
+          - task: PublishTestResults@2
+            displayName: 'Publish Test Results to Azure DevOps'
+            inputs:
+              testResultsFormat: 'VSTest'
+              testResultsFiles: '$(Build.ArtifactStagingDirectory)/test-results/**/*.trx'
+              searchFolder: '$(Build.ArtifactStagingDirectory)/test-results'
+              mergeTestResults: true
+              failTaskOnFailedTests: false
+              testRunTitle: 'Unit + Integration Tests'
